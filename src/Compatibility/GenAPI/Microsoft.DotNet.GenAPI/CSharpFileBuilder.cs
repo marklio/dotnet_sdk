@@ -65,19 +65,9 @@ namespace Microsoft.DotNet.GenAPI
             project = project.AddMetadataReferences(_metadataReferences);
 
             IEnumerable<INamespaceSymbol> namespaceSymbols = EnumerateNamespaces(assemblySymbol).Where(_symbolFilter.Include);
-            List<SyntaxNode> namespaceSyntaxNodes = [];
+            List<SyntaxNode> topLevelDeclarations = VisitNamespaces(namespaceSymbols.Order()).ToList();
 
-            foreach (INamespaceSymbol namespaceSymbol in namespaceSymbols.Order())
-            {
-                SyntaxNode? syntaxNode = Visit(namespaceSymbol);
-
-                if (syntaxNode is not null)
-                {
-                    namespaceSyntaxNodes.Add(syntaxNode);
-                }
-            }
-
-            SyntaxNode compilationUnit = _syntaxGenerator.CompilationUnit(namespaceSyntaxNodes)
+            SyntaxNode compilationUnit = _syntaxGenerator.CompilationUnit(topLevelDeclarations)
                 .WithAdditionalAnnotations(Formatter.Annotation, Simplifier.Annotation)
                 .Rewrite(new TypeDeclarationCSharpSyntaxRewriter())
                 .Rewrite(new BodyBlockCSharpSyntaxRewriter(_exceptionMessage));
@@ -99,28 +89,48 @@ namespace Microsoft.DotNet.GenAPI
                 .WriteTo(_textWriter);
         }
 
-        private SyntaxNode? Visit(INamespaceSymbol namespaceSymbol)
+        private IEnumerable<SyntaxNode> VisitNamespaces(IEnumerable<INamespaceSymbol> namespaceSymbols)
         {
-            SyntaxNode namespaceNode = _syntaxGenerator.NamespaceDeclaration(namespaceSymbol.ToDisplayString());
-
-            IEnumerable<INamedTypeSymbol> typeMembers = namespaceSymbol.GetTypeMembers().Where(_symbolFilter.Include);
-            if (!typeMembers.Any())
+            foreach (var namespaceSymbol in namespaceSymbols)
             {
-                return null;
-            }
+                SyntaxNode? namespaceNode = null;
+                if (!namespaceSymbol.IsGlobalNamespace)
+                {
+                    namespaceNode = _syntaxGenerator.NamespaceDeclaration(namespaceSymbol.ToDisplayString());
+                }
 
-            foreach (INamedTypeSymbol typeMember in typeMembers.Order())
+                IEnumerable<INamedTypeSymbol> typeMembers = namespaceSymbol.GetTypeMembers().Where(_symbolFilter.Include);
+                //PERF: we're executing the LINQ above here in a duplicative fashion
+                if (!typeMembers.Any())
+                {
+                    continue;
+                }
+
+                if (namespaceNode is not null)
+                {
+                    namespaceNode = _syntaxGenerator.AddMembers(namespaceNode, VisitNamespaceContents(typeMembers));
+                    yield return namespaceNode;
+                }
+                else
+                {
+                    foreach (SyntaxNode typeDeclaration in VisitNamespaceContents(typeMembers))
+                    {
+                        yield return typeDeclaration;
+                    }
+                }
+            }
+        }
+
+        private IEnumerable<SyntaxNode> VisitNamespaceContents(IEnumerable<INamedTypeSymbol> typeMembers)
+        {
+            foreach (INamedTypeSymbol typeMember in typeMembers)
             {
                 SyntaxNode typeDeclaration = _syntaxGenerator
                     .DeclarationExt(typeMember, _symbolFilter)
                     .AddMemberAttributes(_syntaxGenerator, typeMember, _attributeDataSymbolFilter);
-
                 typeDeclaration = Visit(typeDeclaration, typeMember);
-
-                namespaceNode = _syntaxGenerator.AddMembers(namespaceNode, typeDeclaration);
+                yield return typeDeclaration;
             }
-
-            return namespaceNode;
         }
 
         // Name hiding through inheritance occurs when classes or structs redeclare names that were inherited from base classes.This type of name hiding takes one of the following forms:
@@ -201,7 +211,7 @@ namespace Microsoft.DotNet.GenAPI
                     }
                 }
 
-                // If the property is derived from an interface that was filter out, we must filtered out it either.
+                // If the property is derived from an interface that was filter out, we must filtered it out as well.
                 if (member is IPropertySymbol property && !property.ExplicitInterfaceImplementations.IsEmpty &&
                     property.ExplicitInterfaceImplementations.Any(m => !_symbolFilter.Include(m.ContainingSymbol)))
                 {
