@@ -28,6 +28,7 @@ namespace Microsoft.DotNet.GenAPI
             string? headerFile,
             string? exceptionMessage,
             string[]? excludeApiFiles,
+            string[]? includeApiFiles, //adding this is a breaking change. What's the compat promise here? Do we need an overload or some other pattern to allow improvements here without too much complexity?
             string[]? excludeAttributesFiles,
             bool respectInternals,
             bool includeAssemblyAttributes)
@@ -54,6 +55,10 @@ namespace Microsoft.DotNet.GenAPI
             if (excludeApiFiles is not null)
             {
                 symbolFilter.Add(new DocIdSymbolFilter(excludeApiFiles));
+            }
+            if (includeApiFiles is not null && includeApiFiles.Length > 0)
+            {
+                symbolFilter.Add(new DocIdSymbolFilter(includeApiFiles, docIdsAreIncludeOnly: true));
             }
             symbolFilter.Add(new ImplicitSymbolFilter());
             symbolFilter.Add(accessibilitySymbolFilter);

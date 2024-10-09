@@ -42,6 +42,14 @@ namespace Microsoft.DotNet.GenAPI.Tool
                 Recursive = true
             };
 
+            CliOption<string[]?> includeApiFilesOption = new("--include-api-file")
+            {
+                Description = "The path to one or more api exclusion files with types in DocId format.",
+                CustomParser = ParseAssemblyArgument,
+                Arity = ArgumentArity.ZeroOrMore,
+                Recursive = true
+            };
+
             CliOption<string[]?> excludeAttributesFilesOption = new("--exclude-attributes-file")
             {
                 Description = "The path to one or more attribute exclusion files with types in DocId format.",
@@ -88,6 +96,7 @@ namespace Microsoft.DotNet.GenAPI.Tool
             rootCommand.Options.Add(assembliesOption);
             rootCommand.Options.Add(assemblyReferencesOption);
             rootCommand.Options.Add(excludeApiFilesOption);
+            rootCommand.Options.Add(includeApiFilesOption);
             rootCommand.Options.Add(excludeAttributesFilesOption);
             rootCommand.Options.Add(outputPathOption);
             rootCommand.Options.Add(headerFileOption);
@@ -97,13 +106,23 @@ namespace Microsoft.DotNet.GenAPI.Tool
 
             rootCommand.SetAction((ParseResult parseResult) =>
             {
+                var excludeFiles = parseResult.GetValue(excludeApiFilesOption);
+                var includeFiles = parseResult.GetValue(includeApiFilesOption);
+                var hasExcludes = excludeFiles is not null && excludeFiles.Length > 0;
+                var hasIncludes = includeFiles is not null && includeFiles.Length > 0;
+                if (hasExcludes && hasIncludes)
+                {
+                    //TODO: what's the right way to handle this condition?
+                    throw new ArgumentException("Cannot specify both --exclude-api-file and --include-api-file.");
+                }
                 GenAPIApp.Run(new ConsoleLog(MessageImportance.Normal),
                     parseResult.GetValue(assembliesOption)!,
                     parseResult.GetValue(assemblyReferencesOption),
                     parseResult.GetValue(outputPathOption),
                     parseResult.GetValue(headerFileOption),
                     parseResult.GetValue(exceptionMessageOption),
-                    parseResult.GetValue(excludeApiFilesOption),
+                    excludeFiles,
+                    includeFiles,
                     parseResult.GetValue(excludeAttributesFilesOption),
                     parseResult.GetValue(respectInternalsOption),
                     parseResult.GetValue(includeAssemblyAttributesOption)

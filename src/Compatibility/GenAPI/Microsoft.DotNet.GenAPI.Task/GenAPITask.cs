@@ -45,6 +45,11 @@ namespace Microsoft.DotNet.GenAPI.Task
         public string[]? ExcludeApiFiles { get; set; }
 
         /// <summary>
+        /// The path to one or more api inclusion files with types in DocId format.
+        /// </summary>
+        public string[]? IncludeApiFiles { get; set; }
+
+        /// <summary>
         /// The path to one or more attribute exclusion files with types in DocId format.
         /// </summary>
         public string[]? ExcludeAttributesFiles { get; set; }
@@ -69,6 +74,7 @@ namespace Microsoft.DotNet.GenAPI.Task
                 HeaderFile,
                 ExceptionMessage,
                 ExcludeApiFiles,
+                IncludeApiFiles,
                 ExcludeAttributesFiles,
                 RespectInternals,
                 IncludeAssemblyAttributes
