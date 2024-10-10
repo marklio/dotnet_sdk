@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Microsoft.DotNet.GenAPI.Tool": {
+      "commandName": "Project",
+      "commandLineArgs": "--assembly c:\\windows\\Microsoft.net\\Framework64\\v4.0.30319\\mscorlib.dll --respect-internals --output-path C:\\Users\\markmil\\Documents\\mscorlib.cs"
+    }
+  }
+}

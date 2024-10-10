@@ -116,7 +116,7 @@ namespace Microsoft.DotNet.GenAPI
                 var initializer = variable.Initializer;
                 if (initializer is not null && fieldSymbol.Type.TypeKind == TypeKind.Enum)
                 {
-                    initializer = initializer.WithValue(SyntaxFactory.CastExpression(fieldDeclaration.Declaration.Type, initializer.Value));
+                    initializer = initializer.WithValue(SyntaxFactory.CastExpression(fieldDeclaration.Declaration.Type, SyntaxFactory.ParenthesizedExpression(initializer.Value)));
                     fieldDeclaration = fieldDeclaration.WithDeclaration(fieldDeclaration.Declaration.WithVariables(SyntaxFactory.SingletonSeparatedList(variable.WithInitializer(initializer))));
                 }
                 return fieldDeclaration;

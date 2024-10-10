@@ -190,5 +190,31 @@ namespace Microsoft.DotNet.GenAPI.Tests.SyntaxRewriter
                     }
                     """);
         }
+
+        [Fact]
+        public void TestPInvoke()
+        {
+            Compare(new SingleLineStatementCSharpSyntaxRewriter(),
+                original: """
+                namespace A
+                {
+                    class B
+                    {
+                        [DllImport("user32.dll")]
+                        public static extern int MessageBox(int hWnd, string text, string caption, uint type);
+                    }
+                }
+                """,
+                expected: """
+                namespace A
+                {
+                    class B
+                    {
+                        [DllImport("user32.dll")]
+                        public static extern int MessageBox(int hWnd, string text, string caption, uint type);
+                    }
+                }
+                """);
+        }
     }
 }

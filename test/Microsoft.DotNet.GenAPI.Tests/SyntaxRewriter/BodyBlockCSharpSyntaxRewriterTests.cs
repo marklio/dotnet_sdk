@@ -194,5 +194,30 @@ namespace Microsoft.DotNet.GenAPI.Tests.SyntaxRewriter
                 }
                 """);
         }
+        [Fact]
+        public void TestPInvoke()
+        {
+            CompareSyntaxTree(new BodyBlockCSharpSyntaxRewriter("Not implemented"),
+                original: """
+                namespace A
+                {
+                    public class Foo
+                    {
+                        [DllImport("user32.dll")]
+                        public extern int MessageBox(int hWnd, string text, string caption, uint type);
+                    }
+                }
+                """,
+                expected: """
+                namespace A
+                {
+                    public class Foo
+                    {
+                        [DllImport("user32.dll")]
+                        public extern int MessageBox(int hWnd, string text, string caption, uint type);
+                    }
+                }
+                """);
+        }
     }
 }

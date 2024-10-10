@@ -286,7 +286,17 @@ namespace Microsoft.DotNet.GenAPI
                 try
                 {
                     //NOTE: interface members get their modifiers stripped, which includes "new" that we may have added above :(
-                    namedTypeNode = _syntaxGenerator.AddMembers(namedTypeNode, memberDeclaration);
+                    if (namedType.TypeKind == TypeKind.Interface)
+                    {
+                        var interfaceDeclaration = (InterfaceDeclarationSyntax)namedTypeNode;
+                        var interfaceMemberDeclaration = (MemberDeclarationSyntax)memberDeclaration;
+                        var modifiers = interfaceMemberDeclaration.Modifiers.Any(SyntaxKind.NewKeyword) ? [SyntaxFactory.Token(SyntaxKind.NewKeyword)] : Array.Empty<SyntaxToken>();
+                        namedTypeNode = interfaceDeclaration.WithMembers(interfaceDeclaration.Members.Add(interfaceMemberDeclaration.WithModifiers(SyntaxFactory.TokenList(modifiers))));
+                    }
+                    else
+                    {
+                        namedTypeNode = _syntaxGenerator.AddMembers(namedTypeNode, memberDeclaration);
+                    }
                 }
                 catch (InvalidOperationException e)
                 {
