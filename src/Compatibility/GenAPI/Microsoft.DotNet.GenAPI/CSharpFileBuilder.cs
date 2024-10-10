@@ -146,39 +146,85 @@ namespace Microsoft.DotNet.GenAPI
                 return false;
             }
 
-            if (member.ContainingType.BaseType is not INamedTypeSymbol baseType)
+            //we need to walk up the hierarchy looking for any possible hiding
+            //in addition, interfaces can hide members from implemented interfaces
+            static IEnumerable<INamedTypeSymbol> EnumerateTypesForHiding(INamedTypeSymbol currentType)
             {
-                return false;
+                switch (currentType.TypeKind)
+                {
+                    case TypeKind.Interface:
+                        foreach (INamedTypeSymbol @interface in currentType.AllInterfaces)
+                        {
+                            yield return @interface;
+                            foreach (var implementedInterface in EnumerateTypesForHiding(@interface))
+                            {
+                                yield return implementedInterface;
+                            }
+                        }
+                        break;
+                    default:
+                        if (currentType.BaseType is INamedTypeSymbol baseType)
+                        {
+                            yield return baseType;
+                            foreach (var baseBaseType in EnumerateTypesForHiding(baseType))
+                            {
+                                yield return baseBaseType;
+                            }
+                        }
+                        break;
+                }
             }
 
-            if (member is IMethodSymbol method)
+            foreach (var currentBase in EnumerateTypesForHiding(member.ContainingType))
             {
-                if (method.MethodKind == MethodKind.ExplicitInterfaceImplementation)
+
+                if (currentBase is not INamedTypeSymbol baseType)
                 {
                     return false;
                 }
 
-                // If they're methods, compare their names and signatures.
-                return baseType.GetMembers(member.Name)
-                    .Any(baseMember => _symbolFilter.Include(baseMember) &&
-                         (baseMember.Kind != SymbolKind.Method ||
-                          method.SignatureEquals((IMethodSymbol)baseMember)));
+                if (member is IMethodSymbol method)
+                {
+                    if (method.MethodKind == MethodKind.ExplicitInterfaceImplementation)
+                    {
+                        return false;
+                    }
+
+                    // If they're methods, compare their names and signatures.
+                    if (baseType.GetMembers(member.Name)
+                        .Any(baseMember => baseMember.DeclaredAccessibility > Accessibility.Private &&
+                            _symbolFilter.Include(baseMember) &&
+                             (baseMember.Kind != SymbolKind.Method ||
+                              method.SignatureEquals((IMethodSymbol)baseMember))))
+                    {
+                        return true;
+                    }
+                }
+                else if (member is IPropertySymbol prop && prop.IsIndexer)
+                {
+                    // If they're indexers, compare their signatures.
+                    if (baseType.GetMembers(member.Name)
+                        .Any(baseMember => baseMember.DeclaredAccessibility > Accessibility.Private &&
+                            baseMember is IPropertySymbol baseProperty &&
+                             _symbolFilter.Include(baseMember) &&
+                             (prop.GetMethod.SignatureEquals(baseProperty.GetMethod) ||
+                              prop.SetMethod.SignatureEquals(baseProperty.SetMethod))))
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    // For all other kinds of members, compare their names.
+                    if (baseType.GetMembers(member.Name)
+                        .Any(baseMember => baseMember.DeclaredAccessibility > Accessibility.Private &&
+                            _symbolFilter.Include(baseMember)))
+                    {
+                        return true;
+                    }
+                }
             }
-            else if (member is IPropertySymbol prop && prop.IsIndexer)
-            {
-                // If they're indexers, compare their signatures.
-                return baseType.GetMembers(member.Name)
-                    .Any(baseMember => baseMember is IPropertySymbol baseProperty &&
-                         _symbolFilter.Include(baseMember) &&
-                         (prop.GetMethod.SignatureEquals(baseProperty.GetMethod) ||
-                          prop.SetMethod.SignatureEquals(baseProperty.SetMethod)));
-            }
-            else
-            {
-                // For all other kinds of members, compare their names.
-                return baseType.GetMembers(member.Name)
-                    .Any(_symbolFilter.Include);
-            }
+            return false;
         }
 
         private SyntaxNode Visit(SyntaxNode namedTypeNode, INamedTypeSymbol namedType)
@@ -239,6 +285,7 @@ namespace Microsoft.DotNet.GenAPI
 
                 try
                 {
+                    //NOTE: interface members get their modifiers stripped, which includes "new" that we may have added above :(
                     namedTypeNode = _syntaxGenerator.AddMembers(namedTypeNode, memberDeclaration);
                 }
                 catch (InvalidOperationException e)

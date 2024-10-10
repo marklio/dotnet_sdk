@@ -108,6 +108,19 @@ namespace Microsoft.DotNet.GenAPI
                 }
             }
 
+            //ensure const initialization is casted to the type of the field if it is an enum
+            if (symbol is IFieldSymbol fieldSymbol && fieldSymbol.IsConst && fieldSymbol.ContainingType.TypeKind != TypeKind.Enum)
+            {
+                var fieldDeclaration = (FieldDeclarationSyntax)syntaxGenerator.Declaration(fieldSymbol);
+                var variable = fieldDeclaration.Declaration.Variables.Single();
+                var initializer = variable.Initializer;
+                if (initializer is not null && fieldSymbol.Type.TypeKind == TypeKind.Enum)
+                {
+                    initializer = initializer.WithValue(SyntaxFactory.CastExpression(fieldDeclaration.Declaration.Type, initializer.Value));
+                    fieldDeclaration = fieldDeclaration.WithDeclaration(fieldDeclaration.Declaration.WithVariables(SyntaxFactory.SingletonSeparatedList(variable.WithInitializer(initializer))));
+                }
+                return fieldDeclaration;
+            }
             try
             {
                 return syntaxGenerator.Declaration(symbol);
