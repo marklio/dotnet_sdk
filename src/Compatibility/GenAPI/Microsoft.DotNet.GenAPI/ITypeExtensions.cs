@@ -16,5 +16,11 @@ namespace Microsoft.DotNet.GenAPI
         {
             return (Accessibility)Math.Min((int)type.DeclaredAccessibility, (int)(type.ContainingType?.GetAccessibilityWithParent() ?? Accessibility.Public));
         }
+
+        public static bool IsUnsafe(this ITypeSymbol type)
+        {
+            if (type.Kind == SymbolKind.PointerType) return true;
+            return false;
+        }
     }
 }

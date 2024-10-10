@@ -46,10 +46,10 @@ namespace Microsoft.DotNet.GenAPI.SyntaxRewriter
                 return rs;
             }
 
-            //TODO: should this just remove the extern keyword instead?
+            //remove extern keyword if present.
             if (rs.Modifiers.Any(token => token.IsKind(SyntaxKind.ExternKeyword)))
             {
-                return rs.WithBody(null).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+                return rs.WithModifiers(rs.Modifiers.Remove(rs.Modifiers.First(token => token.IsKind(SyntaxKind.ExternKeyword))));
             }
 
             if (rs.ExpressionBody is not null)

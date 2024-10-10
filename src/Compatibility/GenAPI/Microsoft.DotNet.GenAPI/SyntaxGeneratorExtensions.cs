@@ -37,7 +37,18 @@ namespace Microsoft.DotNet.GenAPI
                         return typeDeclaration
                             .WithBaseList(syntaxGenerator.GetBaseTypeList(type, symbolFilter))
                             .WithMembers(new SyntaxList<MemberDeclarationSyntax>());
+                    case TypeKind.Delegate:
+                        //we need to determine if the delegate has unsafe parameters
+                        var invokeMember = type.DelegateInvokeMethod;
+                        if (invokeMember is null) throw new InvalidOperationException("Could not get Invoke member of delegate type");
+                        var isUnsafe = invokeMember.ReturnType.IsUnsafe() || invokeMember.Parameters.Any(p => p.Type.IsUnsafe());
 
+                        var delegateDeclaration = (DelegateDeclarationSyntax)syntaxGenerator.Declaration(symbol);
+                        if (isUnsafe)
+                        {
+                            delegateDeclaration = delegateDeclaration.AddModifiers(SyntaxFactory.Token(SyntaxKind.UnsafeKeyword));
+                        }
+                        return delegateDeclaration;
                     case TypeKind.Enum:
                         EnumDeclarationSyntax enumDeclaration = (EnumDeclarationSyntax)syntaxGenerator.Declaration(symbol);
                         return enumDeclaration.WithMembers(new SeparatedSyntaxList<EnumMemberDeclarationSyntax>());
