@@ -81,7 +81,9 @@ namespace Microsoft.DotNet.GenAPI
             compilationUnit = compilationUnit.NormalizeWhitespace(eol: Environment.NewLine);
 
             Document document = project.AddDocument(assemblySymbol.Name, compilationUnit);
-            document = Simplifier.ReduceAsync(document).Result;
+            //TODO: this seems to introduce improperly scoped attributes in places (Like [GuidAttribute("...")] instead of [global::System.Runtime...etc.])
+            //turning it off to learn more.
+            //document = Simplifier.ReduceAsync(document).Result;
             document = Formatter.FormatAsync(document, DefineFormattingOptions()).Result;
 
             document.GetSyntaxRootAsync().Result!
@@ -224,8 +226,10 @@ namespace Microsoft.DotNet.GenAPI
 
                 if (member is INamedTypeSymbol nestedTypeSymbol)
                 {
+                    if (!_symbolFilter.Include(member)) continue;
                     memberDeclaration = Visit(memberDeclaration, nestedTypeSymbol);
                 }
+
 
                 if (HidesBaseMember(member))
                 {
