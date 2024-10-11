@@ -259,6 +259,13 @@ namespace Microsoft.DotNet.ApiSymbolExtensions
         /// <inheritdoc />
         public IEnumerable<MetadataReference> MetadataReferences => _cSharpCompilation.References;
 
+        //TODO: this path has some problems with casing and the collision between:
+        //* Assembly names have a "canonical" casing of their names (the thing in the assembly row)
+        //* File system paths have a "canonical" casing of their names (the thing in the file system)
+        //* The behavior of string comparisons in the data structures.
+        //It is easy to pass strings to this method and have it fail to produce an assembly universe
+        //because of tripping over casing. It seems like this works fine if you ask for file names
+        //that match the canonical casing of assembly names in a case insensitive file system.
         private List<MetadataReference> LoadFromPaths(IEnumerable<string> paths, ImmutableHashSet<string>? referenceAssemblyNamesToIgnore = null)
         {
             List<MetadataReference> result = [];

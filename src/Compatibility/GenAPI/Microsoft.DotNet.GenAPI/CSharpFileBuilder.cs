@@ -285,12 +285,22 @@ namespace Microsoft.DotNet.GenAPI
 
                 try
                 {
-                    //NOTE: interface members get their modifiers stripped, which includes "new" that we may have added above :(
+                    //NOTE: interface members get their modifiers stripped, which includes:
+                    //* "new" that we may have added above
+                    //* "unsafe" that may have existed in the original source
                     if (namedType.TypeKind == TypeKind.Interface)
                     {
                         var interfaceDeclaration = (InterfaceDeclarationSyntax)namedTypeNode;
                         var interfaceMemberDeclaration = (MemberDeclarationSyntax)memberDeclaration;
-                        var modifiers = interfaceMemberDeclaration.Modifiers.Any(SyntaxKind.NewKeyword) ? [SyntaxFactory.Token(SyntaxKind.NewKeyword)] : Array.Empty<SyntaxToken>();
+                        var modifiers = new List<SyntaxToken>();
+                        if (interfaceMemberDeclaration.Modifiers.Any(SyntaxKind.NewKeyword))
+                        {
+                            modifiers.Add(SyntaxFactory.Token(SyntaxKind.NewKeyword));
+                        }
+                        if (interfaceMemberDeclaration.Modifiers.Any(SyntaxKind.UnsafeKeyword))
+                        {
+                            modifiers.Add(SyntaxFactory.Token(SyntaxKind.UnsafeKeyword));
+                        }
                         namedTypeNode = interfaceDeclaration.WithMembers(interfaceDeclaration.Members.Add(interfaceMemberDeclaration.WithModifiers(SyntaxFactory.TokenList(modifiers))));
                     }
                     else

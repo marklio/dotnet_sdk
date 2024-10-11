@@ -44,7 +44,7 @@ namespace Microsoft.DotNet.GenAPI.Tool
 
             CliOption<string[]?> includeApiFilesOption = new("--include-api-file")
             {
-                Description = "The path to one or more api exclusion files with types in DocId format.",
+                Description = "The path to one or more api inclusion files with types in DocId format.",
                 CustomParser = ParseAssemblyArgument,
                 Arity = ArgumentArity.ZeroOrMore,
                 Recursive = true
@@ -65,9 +65,10 @@ namespace Microsoft.DotNet.GenAPI.Tool
                 Recursive = true
             };
 
-            CliOption<string?> headerFileOption = new("--header-file")
+            CliOption<string[]?> headerFileOption = new("--header-file")
             {
-                Description = "Specify a file with an alternate header content to prepend to output.",
+                Description = "Specify one or more files with alternate header content to prepend to output.",
+                Arity = ArgumentArity.ZeroOrMore,
                 Recursive = true
             };
 

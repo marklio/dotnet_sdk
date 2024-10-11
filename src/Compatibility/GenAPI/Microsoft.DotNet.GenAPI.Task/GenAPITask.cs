@@ -30,9 +30,9 @@ namespace Microsoft.DotNet.GenAPI.Task
         public string? OutputPath { get; set; }
 
         /// <summary>
-        /// Specify a file with an alternate header content to prepend to output.
+        /// Specify a file or files with an alternate header content to prepend to output.
         /// </summary>
-        public string? HeaderFile { get; set; }
+        public string[]? HeaderFiles { get; set; }
 
         /// <summary>
         /// Method bodies should throw PlatformNotSupportedException.
@@ -71,7 +71,7 @@ namespace Microsoft.DotNet.GenAPI.Task
                 Assemblies!,
                 AssemblyReferences,
                 OutputPath,
-                HeaderFile,
+                HeaderFiles,
                 ExceptionMessage,
                 ExcludeApiFiles,
                 IncludeApiFiles,

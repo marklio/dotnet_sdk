@@ -25,7 +25,7 @@ namespace Microsoft.DotNet.GenAPI
             string[] assemblies,
             string[]? assemblyReferences,
             string? outputPath,
-            string? headerFile,
+            string[]? headerFiles,
             string? exceptionMessage,
             string[]? excludeApiFiles,
             string[]? includeApiFiles, //adding this is a breaking change. What's the compat promise here? Do we need an overload or some other pattern to allow improvements here without too much complexity?
@@ -43,7 +43,7 @@ namespace Microsoft.DotNet.GenAPI
             }
             IReadOnlyList<IAssemblySymbol?> assemblySymbols = loader.LoadAssemblies(assemblies);
 
-            string headerFileText = ReadHeaderFile(headerFile);
+            string headerFileText = ReadHeaderFiles(headerFiles);
 
             AccessibilitySymbolFilter accessibilitySymbolFilter = new(
                 respectInternals,
@@ -126,7 +126,7 @@ namespace Microsoft.DotNet.GenAPI
         }
 
         // Read the header file if specified, or use default one.
-        private static string ReadHeaderFile(string? headerFile)
+        private static string ReadHeaderFiles(string[]? headerFiles)
         {
             const string defaultFileHeader = """
             //------------------------------------------------------------------------------
@@ -140,8 +140,8 @@ namespace Microsoft.DotNet.GenAPI
 
             """;
 
-            string header = !string.IsNullOrEmpty(headerFile) ?
-                File.ReadAllText(headerFile) :
+            string header = headerFiles is not null && headerFiles.Length > 0 ?
+                String.Join(Environment.NewLine, from headerFile in headerFiles select File.ReadAllText(headerFile)) :
                 defaultFileHeader;
 
 #if NET
