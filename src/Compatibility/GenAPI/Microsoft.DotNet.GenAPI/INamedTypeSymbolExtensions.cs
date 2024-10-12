@@ -237,8 +237,10 @@ namespace Microsoft.DotNet.GenAPI
 
             foreach (IParameterSymbol parameter in method.Parameters)
             {
+                //TODO: the simplifier seems to over-simplify these to the point that "base constructor calls" become ambiguous
                 ExpressionSyntax expression = SyntaxFactory.DefaultExpression(SyntaxFactory.ParseTypeName(parameter.Type.ToDisplayString()));
 
+                //TODO: can netfx compilers deal with nullable annotations?
                 // If the parameter is not value type and isn't annotated to accept null, suppress the nullable warning with !
                 if (!parameter.Type.IsValueType && parameter.NullableAnnotation != NullableAnnotation.Annotated)
                     expression = SyntaxFactory.PostfixUnaryExpression(SyntaxKind.SuppressNullableWarningExpression, expression);

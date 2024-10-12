@@ -36,11 +36,11 @@ namespace Microsoft.DotNet.ApiSymbolExtensions.Filtering
             return !_docIdsAreIncludeOnly;
         }
 
-        private static IEnumerable<string> ReadDocIdsAttributes(IEnumerable<string> docIdsToExcludeFiles)
+        private static IEnumerable<string> ReadDocIdsAttributes(IEnumerable<string> docIdsFiles)
         {
-            foreach (string docIdsToExcludeFile in docIdsToExcludeFiles)
+            foreach (string docIdsFile in docIdsFiles)
             {
-                foreach (string id in File.ReadAllLines(docIdsToExcludeFile))
+                foreach (string id in File.ReadAllLines(docIdsFile))
                 {
 #if NET
                     if (!string.IsNullOrWhiteSpace(id) && !id.StartsWith('#') && !id.StartsWith("//"))

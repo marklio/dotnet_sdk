@@ -95,9 +95,10 @@ namespace Microsoft.DotNet.GenAPI
                 {
                     //TODO: create appropriate diagnostic message
                     if (eventSymbol.ExplicitInterfaceImplementations.Length > 1) throw new NotSupportedException("More than 1 explicit implementation is not supported.");
-                    return syntaxGenerator.CustomEventDeclaration(eventSymbol.ExplicitInterfaceImplementations[0].Name,
+                    //TODO: what's the right way to generate the name?
+                    return syntaxGenerator.CustomEventDeclaration(eventSymbol.ExplicitInterfaceImplementations[0].ToDisplayString(),
                         syntaxGenerator.TypeExpression(eventSymbol.Type),
-                        eventSymbol.DeclaredAccessibility,
+                        eventSymbol.DeclaredAccessibility == Accessibility.Private ? Accessibility.NotApplicable : eventSymbol.DeclaredAccessibility,
                         DeclarationModifiers.From(eventSymbol));
                 }
                 // adds generation of add & remove accessors for the non abstract events.
