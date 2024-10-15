@@ -63,13 +63,18 @@ namespace Microsoft.DotNet.GenAPI
                     INamedTypeSymbol? baseType = method.ContainingType.BaseType;
                     if (baseType != null)
                     {
-                        IEnumerable<IMethodSymbol> baseConstructors = baseType.Constructors.Where(symbolFilter.Include);
+                        //get the list of filtered base constructors that are not "obsolete with error".
+                        //If they are included, we'll end up picking one that can't compile.
+                        IEnumerable<IMethodSymbol> baseConstructors = baseType.Constructors
+                            .Where(symbolFilter.Include)
+                            .Where(c => c.GetAttributes().All(a => !a.IsObsoleteWithUsageTreatedAsCompilationError()));
                         // If the base type does not have default constructor.
                         if (baseConstructors.Any() && baseConstructors.All(c => !c.Parameters.IsEmpty))
                         {
+                            //markmil: this is another place where we can choose a "bad" base constructor (that is, one that will not compile due to various issues like visibility)
+                            //ideally, we should choose THE base constructor that it is already calling.
                             IOrderedEnumerable<IMethodSymbol> baseTypeConstructors = baseConstructors
-                                .Where(c => c.GetAttributes().All(a => !a.IsObsoleteWithUsageTreatedAsCompilationError()))
-                                .OrderBy(c => c.Parameters.Length);
+                                .OrderByDescending(c => c.DeclaredAccessibility).ThenBy(c=>c.Parameters.Length);
 
                             if (baseTypeConstructors.Any())
                             {

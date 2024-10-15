@@ -215,7 +215,15 @@ namespace Microsoft.DotNet.GenAPI
                 default(BlockSyntax)!);
 
             // find base constructor to call if it's not implicit.
-            IEnumerable<IMethodSymbol> baseConstructors = namedType.BaseType?.Constructors.Where(symbolFilter.Include) ?? Enumerable.Empty<IMethodSymbol>();
+            //markmil: This approach is naive when the base type contains constructors that are exposed as part of the API contract that AREN'T suitable to be
+            //"randomly picked" as the base constructor (due to visibility, etc.). We might get around this with custom refs for everything, but this likely
+            //isn't a sustainable pattern.
+            //let's try to be more intelligent about this with some sorting.
+            //TODO: this logic should be consolidated with the logic in the constructor generator.
+            IEnumerable<IMethodSymbol> baseConstructors = namedType.BaseType?.Constructors
+                .Where(symbolFilter.Include)
+                .Where(c => c.GetAttributes().All(a => !a.IsObsoleteWithUsageTreatedAsCompilationError()))
+                .OrderByDescending(c => c.DeclaredAccessibility).ThenBy(c => c.Parameters.Length) ?? Enumerable.Empty<IMethodSymbol>();
             if (baseConstructors.Any() && baseConstructors.All(c => !c.Parameters.IsEmpty))
             {
                 constructor = constructor.WithInitializer(baseConstructors.First().GenerateBaseConstructorInitializer());

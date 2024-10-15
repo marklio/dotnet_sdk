@@ -83,7 +83,8 @@ namespace Microsoft.DotNet.GenAPI
             Document document = project.AddDocument(assemblySymbol.Name, compilationUnit);
             //TODO: this seems to introduce improperly scoped attributes in places (Like [GuidAttribute("...")] instead of [global::System.Runtime...etc.])
             //This is being handled via extra usings in the "header" for now. Seems buggy.
-            document = Simplifier.ReduceAsync(document).Result;
+            //turning off because our use of default(Type) is being stripped to default, which causes ambiguous calls
+            //document = Simplifier.ReduceAsync(document).Result;
             document = Formatter.FormatAsync(document, DefineFormattingOptions()).Result;
 
             document.GetSyntaxRootAsync().Result!
