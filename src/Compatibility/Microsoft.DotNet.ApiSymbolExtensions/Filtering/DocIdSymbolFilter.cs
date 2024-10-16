@@ -9,9 +9,13 @@ namespace Microsoft.DotNet.ApiSymbolExtensions.Filtering
     /// Implements the logic of filtering out api.
     /// Reads the file with the list of attributes, types, members in DocId format.
     /// </summary>
-    public class DocIdSymbolFilter(string[] docIdsToExcludeFiles) : ISymbolFilter
+    public class DocIdSymbolFilter(string[] docIds, bool docIdsAreIncludeOnly) : ISymbolFilter
     {
-        private readonly HashSet<string> _docIdsToExclude = new(ReadDocIdsAttributes(docIdsToExcludeFiles));
+        //constructor for compat.
+        public DocIdSymbolFilter(string[] docIdsToExcludeFiles) : this(docIdsToExcludeFiles, false) { }
+
+        private readonly HashSet<string> _docIds = new(ReadDocIdsAttributes(docIds));
+        private readonly bool _docIdsAreIncludeOnly = docIdsAreIncludeOnly;
 
         /// <summary>
         ///  Determines whether the <see cref="ISymbol"/> should be included.
@@ -21,19 +25,22 @@ namespace Microsoft.DotNet.ApiSymbolExtensions.Filtering
         public bool Include(ISymbol symbol)
         {
             string? docId = symbol.GetDocumentationCommentId();
-            if (docId is not null && _docIdsToExclude.Contains(docId))
+            //if there's no doc id, always include it
+            if (docId is null) return true;
+            //if the doc id is in the list, return the meaning of the list
+            if (_docIds.Contains(docId))
             {
-                return false;
+                return _docIdsAreIncludeOnly;
             }
 
-            return true;
+            return !_docIdsAreIncludeOnly;
         }
 
-        private static IEnumerable<string> ReadDocIdsAttributes(IEnumerable<string> docIdsToExcludeFiles)
+        private static IEnumerable<string> ReadDocIdsAttributes(IEnumerable<string> docIdsFiles)
         {
-            foreach (string docIdsToExcludeFile in docIdsToExcludeFiles)
+            foreach (string docIdsFile in docIdsFiles)
             {
-                foreach (string id in File.ReadAllLines(docIdsToExcludeFile))
+                foreach (string id in File.ReadAllLines(docIdsFile))
                 {
 #if NET
                     if (!string.IsNullOrWhiteSpace(id) && !id.StartsWith('#') && !id.StartsWith("//"))

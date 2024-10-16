@@ -1,0 +1,24 @@
+{
+  "profiles": {
+    "Microsoft.DotNet.GenAPI.Tool": {
+      "commandName": "Project",
+      "commandLineArgs": "--assembly c:\\windows\\Microsoft.net\\Framework64\\v4.0.30319\\mscorlib.dll --respect-internals  --exclude-attributes-file C:\\Users\\markmil\\Documents\\GenApiTesting\\exclude_assemblykeyfileattribute.txt --include-assembly-attributes --header-file C:\\Users\\markmil\\Documents\\genapitesting\\mscorlib_header.cs --output-path C:\\Users\\markmil\\Documents\\genapitesting\\mscorlib.cs"
+    },
+    "Tiny System.Configuration": {
+      "commandName": "Project",
+      "commandLineArgs": "--assembly c:\\windows\\Microsoft.net\\Framework64\\v4.0.30319\\System.Configuration.dll --respect-internals  --exclude-attributes-file C:\\Users\\markmil\\Documents\\GenApiTesting\\exclude_assemblykeyfileattribute.txt --include-assembly-attributes --assembly-reference c:\\windows\\Microsoft.net\\Framework64\\v4.0.30319 --output-path C:\\Users\\markmil\\Documents\\genapitesting\\sys.config.small.cs --include-api-file C:\\Users\\markmil\\Documents\\genapitesting\\System.Configuration_for_System\\includeonly.txt"
+    },
+    "System": {
+      "commandName": "Project",
+      "commandLineArgs": "--assembly c:\\windows\\Microsoft.net\\Framework64\\v4.0.30319\\System.dll --respect-internals --include-assembly-attributes --exclude-attributes-file C:\\Users\\markmil\\Documents\\GenAPITesting\\\\exclude_assemblykeyfileattribute.txt --header-file C:\\Users\\markmil\\Documents\\GenAPITesting\\\\system_header.cs --header-file C:\\Users\\markmil\\Documents\\GenAPITesting\\\\ecma_key_header.cs --assembly-reference c:\\windows\\Microsoft.net\\Framework64\\v4.0.30319 --output-path C:\\Users\\markmil\\Documents\\GenAPITesting\\\\system.cs"
+    },
+    "System.Xml for System.Configuration": {
+      "commandName": "Project",
+      "commandLineArgs": "--assembly c:\\windows\\Microsoft.net\\Framework64\\v4.0.30319\\System.Xml.dll --include-api-file C:\\Users\\markmil\\Documents\\GenAPITesting\\\\System.Xml_for_System.Configuration\\includeonly.txt --include-assembly-attributes --exclude-attributes-file C:\\Users\\markmil\\Documents\\GenAPITesting\\\\exclude_assemblykeyfileattribute.txt --header-file C:\\Users\\markmil\\Documents\\GenAPITesting\\\\ecma_key_header.cs --assembly-reference c:\\windows\\Microsoft.net\\Framework64\\v4.0.30319 --output-path C:\\Users\\markmil\\Documents\\GenAPITesting\\\\System.Xml_for_System.Configuration\\System.Xml.cs"
+    },
+    "System.Xml for System": {
+      "commandName": "Project",
+      "commandLineArgs": "--assembly c:\\windows\\Microsoft.net\\Framework64\\v4.0.30319\\System.Xml.dll --include-api-file C:\\Users\\markmil\\Documents\\GenAPITesting\\\\System.Xml_for_System\\includeonly.txt --include-assembly-attributes --exclude-attributes-file C:\\Users\\markmil\\Documents\\GenAPITesting\\\\exclude_assemblykeyfileattribute.txt --exclude-attributes-file C:\\Users\\markmil\\Documents\\GenAPITesting\\\\System.Xml_for_System\\attributes_to_filter.txt --header-file C:\\Users\\markmil\\Documents\\GenAPITesting\\\\ecma_key_header.cs --assembly-reference c:\\windows\\Microsoft.net\\Framework64\\v4.0.30319 --output-path C:\\Users\\markmil\\Documents\\GenAPITesting\\\\System.Xml_for_System\\System.Xml.cs"
+    }
+  }
+}

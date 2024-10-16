@@ -46,6 +46,12 @@ namespace Microsoft.DotNet.GenAPI.SyntaxRewriter
                 return rs;
             }
 
+            //remove extern keyword if present.
+            if (rs.Modifiers.Any(token => token.IsKind(SyntaxKind.ExternKeyword)))
+            {
+                rs = rs.WithModifiers(rs.Modifiers.Remove(rs.Modifiers.First(token => token.IsKind(SyntaxKind.ExternKeyword))));
+            }
+
             if (rs.ExpressionBody is not null)
             {
                 rs = rs.WithExpressionBody(null);

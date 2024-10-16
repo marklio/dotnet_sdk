@@ -65,19 +65,9 @@ namespace Microsoft.DotNet.GenAPI
             project = project.AddMetadataReferences(_metadataReferences);
 
             IEnumerable<INamespaceSymbol> namespaceSymbols = EnumerateNamespaces(assemblySymbol).Where(_symbolFilter.Include);
-            List<SyntaxNode> namespaceSyntaxNodes = [];
+            List<SyntaxNode> topLevelDeclarations = VisitNamespaces(namespaceSymbols.Order()).ToList();
 
-            foreach (INamespaceSymbol namespaceSymbol in namespaceSymbols.Order())
-            {
-                SyntaxNode? syntaxNode = Visit(namespaceSymbol);
-
-                if (syntaxNode is not null)
-                {
-                    namespaceSyntaxNodes.Add(syntaxNode);
-                }
-            }
-
-            SyntaxNode compilationUnit = _syntaxGenerator.CompilationUnit(namespaceSyntaxNodes)
+            SyntaxNode compilationUnit = _syntaxGenerator.CompilationUnit(topLevelDeclarations)
                 .WithAdditionalAnnotations(Formatter.Annotation, Simplifier.Annotation)
                 .Rewrite(new TypeDeclarationCSharpSyntaxRewriter())
                 .Rewrite(new BodyBlockCSharpSyntaxRewriter(_exceptionMessage));
@@ -91,7 +81,10 @@ namespace Microsoft.DotNet.GenAPI
             compilationUnit = compilationUnit.NormalizeWhitespace(eol: Environment.NewLine);
 
             Document document = project.AddDocument(assemblySymbol.Name, compilationUnit);
-            document = Simplifier.ReduceAsync(document).Result;
+            //TODO: this seems to introduce improperly scoped attributes in places (Like [GuidAttribute("...")] instead of [global::System.Runtime...etc.])
+            //This is being handled via extra usings in the "header" for now. Seems buggy.
+            //turning off because our use of default(Type) is being stripped to default, which causes ambiguous calls
+            //document = Simplifier.ReduceAsync(document).Result;
             document = Formatter.FormatAsync(document, DefineFormattingOptions()).Result;
 
             document.GetSyntaxRootAsync().Result!
@@ -99,28 +92,48 @@ namespace Microsoft.DotNet.GenAPI
                 .WriteTo(_textWriter);
         }
 
-        private SyntaxNode? Visit(INamespaceSymbol namespaceSymbol)
+        private IEnumerable<SyntaxNode> VisitNamespaces(IEnumerable<INamespaceSymbol> namespaceSymbols)
         {
-            SyntaxNode namespaceNode = _syntaxGenerator.NamespaceDeclaration(namespaceSymbol.ToDisplayString());
-
-            IEnumerable<INamedTypeSymbol> typeMembers = namespaceSymbol.GetTypeMembers().Where(_symbolFilter.Include);
-            if (!typeMembers.Any())
+            foreach (var namespaceSymbol in namespaceSymbols)
             {
-                return null;
-            }
+                SyntaxNode? namespaceNode = null;
+                if (!namespaceSymbol.IsGlobalNamespace)
+                {
+                    namespaceNode = _syntaxGenerator.NamespaceDeclaration(namespaceSymbol.ToDisplayString());
+                }
 
-            foreach (INamedTypeSymbol typeMember in typeMembers.Order())
+                IEnumerable<INamedTypeSymbol> typeMembers = namespaceSymbol.GetTypeMembers().Where(_symbolFilter.Include);
+                //PERF: we're executing the LINQ above here in a duplicative fashion
+                if (!typeMembers.Any())
+                {
+                    continue;
+                }
+
+                if (namespaceNode is not null)
+                {
+                    namespaceNode = _syntaxGenerator.AddMembers(namespaceNode, VisitNamespaceContents(typeMembers));
+                    yield return namespaceNode;
+                }
+                else
+                {
+                    foreach (SyntaxNode typeDeclaration in VisitNamespaceContents(typeMembers))
+                    {
+                        yield return typeDeclaration;
+                    }
+                }
+            }
+        }
+
+        private IEnumerable<SyntaxNode> VisitNamespaceContents(IEnumerable<INamedTypeSymbol> typeMembers)
+        {
+            foreach (INamedTypeSymbol typeMember in typeMembers)
             {
                 SyntaxNode typeDeclaration = _syntaxGenerator
                     .DeclarationExt(typeMember, _symbolFilter)
                     .AddMemberAttributes(_syntaxGenerator, typeMember, _attributeDataSymbolFilter);
-
                 typeDeclaration = Visit(typeDeclaration, typeMember);
-
-                namespaceNode = _syntaxGenerator.AddMembers(namespaceNode, typeDeclaration);
+                yield return typeDeclaration;
             }
-
-            return namespaceNode;
         }
 
         // Name hiding through inheritance occurs when classes or structs redeclare names that were inherited from base classes.This type of name hiding takes one of the following forms:
@@ -134,39 +147,85 @@ namespace Microsoft.DotNet.GenAPI
                 return false;
             }
 
-            if (member.ContainingType.BaseType is not INamedTypeSymbol baseType)
+            //we need to walk up the hierarchy looking for any possible hiding
+            //in addition, interfaces can hide members from implemented interfaces
+            static IEnumerable<INamedTypeSymbol> EnumerateTypesForHiding(INamedTypeSymbol currentType)
             {
-                return false;
+                switch (currentType.TypeKind)
+                {
+                    case TypeKind.Interface:
+                        foreach (INamedTypeSymbol @interface in currentType.AllInterfaces)
+                        {
+                            yield return @interface;
+                            foreach (var implementedInterface in EnumerateTypesForHiding(@interface))
+                            {
+                                yield return implementedInterface;
+                            }
+                        }
+                        break;
+                    default:
+                        if (currentType.BaseType is INamedTypeSymbol baseType)
+                        {
+                            yield return baseType;
+                            foreach (var baseBaseType in EnumerateTypesForHiding(baseType))
+                            {
+                                yield return baseBaseType;
+                            }
+                        }
+                        break;
+                }
             }
 
-            if (member is IMethodSymbol method)
+            foreach (var currentBase in EnumerateTypesForHiding(member.ContainingType))
             {
-                if (method.MethodKind == MethodKind.ExplicitInterfaceImplementation)
+
+                if (currentBase is not INamedTypeSymbol baseType)
                 {
                     return false;
                 }
 
-                // If they're methods, compare their names and signatures.
-                return baseType.GetMembers(member.Name)
-                    .Any(baseMember => _symbolFilter.Include(baseMember) &&
-                         (baseMember.Kind != SymbolKind.Method ||
-                          method.SignatureEquals((IMethodSymbol)baseMember)));
+                if (member is IMethodSymbol method)
+                {
+                    if (method.MethodKind == MethodKind.ExplicitInterfaceImplementation)
+                    {
+                        return false;
+                    }
+
+                    // If they're methods, compare their names and signatures.
+                    if (baseType.GetMembers(member.Name)
+                        .Any(baseMember => baseMember.DeclaredAccessibility > Accessibility.Private &&
+                            _symbolFilter.Include(baseMember) &&
+                             (baseMember.Kind != SymbolKind.Method ||
+                              method.SignatureEquals((IMethodSymbol)baseMember))))
+                    {
+                        return true;
+                    }
+                }
+                else if (member is IPropertySymbol prop && prop.IsIndexer)
+                {
+                    // If they're indexers, compare their signatures.
+                    if (baseType.GetMembers(member.Name)
+                        .Any(baseMember => baseMember.DeclaredAccessibility > Accessibility.Private &&
+                            baseMember is IPropertySymbol baseProperty &&
+                             _symbolFilter.Include(baseMember) &&
+                             (prop.GetMethod.SignatureEquals(baseProperty.GetMethod) ||
+                              prop.SetMethod.SignatureEquals(baseProperty.SetMethod))))
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    // For all other kinds of members, compare their names.
+                    if (baseType.GetMembers(member.Name)
+                        .Any(baseMember => baseMember.DeclaredAccessibility > Accessibility.Private &&
+                            _symbolFilter.Include(baseMember)))
+                    {
+                        return true;
+                    }
+                }
             }
-            else if (member is IPropertySymbol prop && prop.IsIndexer)
-            {
-                // If they're indexers, compare their signatures.
-                return baseType.GetMembers(member.Name)
-                    .Any(baseMember => baseMember is IPropertySymbol baseProperty &&
-                         _symbolFilter.Include(baseMember) &&
-                         (prop.GetMethod.SignatureEquals(baseProperty.GetMethod) ||
-                          prop.SetMethod.SignatureEquals(baseProperty.SetMethod)));
-            }
-            else
-            {
-                // For all other kinds of members, compare their names.
-                return baseType.GetMembers(member.Name)
-                    .Any(_symbolFilter.Include);
-            }
+            return false;
         }
 
         private SyntaxNode Visit(SyntaxNode namedTypeNode, INamedTypeSymbol namedType)
@@ -201,7 +260,7 @@ namespace Microsoft.DotNet.GenAPI
                     }
                 }
 
-                // If the property is derived from an interface that was filter out, we must filtered out it either.
+                // If the property is derived from an interface that was filter out, we must filtered it out as well.
                 if (member is IPropertySymbol property && !property.ExplicitInterfaceImplementations.IsEmpty &&
                     property.ExplicitInterfaceImplementations.Any(m => !_symbolFilter.Include(m.ContainingSymbol)))
                 {
@@ -214,8 +273,10 @@ namespace Microsoft.DotNet.GenAPI
 
                 if (member is INamedTypeSymbol nestedTypeSymbol)
                 {
+                    if (!_symbolFilter.Include(member)) continue;
                     memberDeclaration = Visit(memberDeclaration, nestedTypeSymbol);
                 }
+
 
                 if (HidesBaseMember(member))
                 {
@@ -225,7 +286,28 @@ namespace Microsoft.DotNet.GenAPI
 
                 try
                 {
-                    namedTypeNode = _syntaxGenerator.AddMembers(namedTypeNode, memberDeclaration);
+                    //NOTE: interface members get their modifiers stripped, which includes:
+                    //* "new" that we may have added above
+                    //* "unsafe" that may have existed in the original source
+                    if (namedType.TypeKind == TypeKind.Interface)
+                    {
+                        var interfaceDeclaration = (InterfaceDeclarationSyntax)namedTypeNode;
+                        var interfaceMemberDeclaration = (MemberDeclarationSyntax)memberDeclaration;
+                        var modifiers = new List<SyntaxToken>();
+                        if (interfaceMemberDeclaration.Modifiers.Any(SyntaxKind.NewKeyword))
+                        {
+                            modifiers.Add(SyntaxFactory.Token(SyntaxKind.NewKeyword));
+                        }
+                        if (interfaceMemberDeclaration.Modifiers.Any(SyntaxKind.UnsafeKeyword))
+                        {
+                            modifiers.Add(SyntaxFactory.Token(SyntaxKind.UnsafeKeyword));
+                        }
+                        namedTypeNode = interfaceDeclaration.WithMembers(interfaceDeclaration.Members.Add(interfaceMemberDeclaration.WithModifiers(SyntaxFactory.TokenList(modifiers))));
+                    }
+                    else
+                    {
+                        namedTypeNode = _syntaxGenerator.AddMembers(namedTypeNode, memberDeclaration);
+                    }
                 }
                 catch (InvalidOperationException e)
                 {

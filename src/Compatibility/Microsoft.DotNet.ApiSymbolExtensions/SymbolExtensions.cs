@@ -75,9 +75,13 @@ namespace Microsoft.DotNet.ApiSymbolExtensions
         /// </summary>
         /// <param name="symbol"><see cref="ISymbol"/>  Represents a symbol (namespace, class, method, parameter, etc.) exposed by the compiler.</param>
         /// <returns>true if the symbol is the explicit interface implementation method</returns>
-        public static bool IsExplicitInterfaceImplementation(this ISymbol symbol) =>
-            symbol is IMethodSymbol method && method.MethodKind == MethodKind.ExplicitInterfaceImplementation ||
-            symbol is IPropertySymbol property && !property.ExplicitInterfaceImplementations.IsEmpty;
+        public static bool IsExplicitInterfaceImplementation(this ISymbol symbol) => symbol switch
+        {
+            IMethodSymbol method => method.MethodKind == MethodKind.ExplicitInterfaceImplementation,
+            IPropertySymbol property => !property.ExplicitInterfaceImplementations.IsEmpty,
+            IEventSymbol @event => !@event.ExplicitInterfaceImplementations.IsEmpty,
+            _ => false,
+        };
 
         private static bool HasVisibleConstructor(ITypeSymbol type, bool includeInternalSymbols)
         {

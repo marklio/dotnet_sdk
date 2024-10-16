@@ -37,7 +37,18 @@ namespace Microsoft.DotNet.GenAPI
                         return typeDeclaration
                             .WithBaseList(syntaxGenerator.GetBaseTypeList(type, symbolFilter))
                             .WithMembers(new SyntaxList<MemberDeclarationSyntax>());
+                    case TypeKind.Delegate:
+                        //we need to determine if the delegate has unsafe parameters
+                        var invokeMember = type.DelegateInvokeMethod;
+                        if (invokeMember is null) throw new InvalidOperationException("Could not get Invoke member of delegate type");
+                        var isUnsafe = invokeMember.ReturnType.IsUnsafe() || invokeMember.Parameters.Any(p => p.Type.IsUnsafe());
 
+                        var delegateDeclaration = (DelegateDeclarationSyntax)syntaxGenerator.Declaration(symbol);
+                        if (isUnsafe)
+                        {
+                            delegateDeclaration = delegateDeclaration.AddModifiers(SyntaxFactory.Token(SyntaxKind.UnsafeKeyword));
+                        }
+                        return delegateDeclaration;
                     case TypeKind.Enum:
                         EnumDeclarationSyntax enumDeclaration = (EnumDeclarationSyntax)syntaxGenerator.Declaration(symbol);
                         return enumDeclaration.WithMembers(new SeparatedSyntaxList<EnumMemberDeclarationSyntax>());
@@ -52,13 +63,18 @@ namespace Microsoft.DotNet.GenAPI
                     INamedTypeSymbol? baseType = method.ContainingType.BaseType;
                     if (baseType != null)
                     {
-                        IEnumerable<IMethodSymbol> baseConstructors = baseType.Constructors.Where(symbolFilter.Include);
+                        //get the list of filtered base constructors that are not "obsolete with error".
+                        //If they are included, we'll end up picking one that can't compile.
+                        IEnumerable<IMethodSymbol> baseConstructors = baseType.Constructors
+                            .Where(symbolFilter.Include)
+                            .Where(c => c.GetAttributes().All(a => !a.IsObsoleteWithUsageTreatedAsCompilationError()));
                         // If the base type does not have default constructor.
                         if (baseConstructors.Any() && baseConstructors.All(c => !c.Parameters.IsEmpty))
                         {
+                            //markmil: this is another place where we can choose a "bad" base constructor (that is, one that will not compile due to various issues like visibility)
+                            //ideally, we should choose THE base constructor that it is already calling.
                             IOrderedEnumerable<IMethodSymbol> baseTypeConstructors = baseConstructors
-                                .Where(c => c.GetAttributes().All(a => !a.IsObsoleteWithUsageTreatedAsCompilationError()))
-                                .OrderBy(c => c.Parameters.Length);
+                                .OrderByDescending(c => c.DeclaredAccessibility).ThenBy(c=>c.Parameters.Length);
 
                             if (baseTypeConstructors.Any())
                             {
@@ -80,6 +96,16 @@ namespace Microsoft.DotNet.GenAPI
 
             if (symbol is IEventSymbol eventSymbol && !eventSymbol.IsAbstract)
             {
+                if (eventSymbol.ExplicitInterfaceImplementations.Length > 0)
+                {
+                    //TODO: create appropriate diagnostic message
+                    if (eventSymbol.ExplicitInterfaceImplementations.Length > 1) throw new NotSupportedException("More than 1 explicit implementation is not supported.");
+                    //TODO: what's the right way to generate the name?
+                    return syntaxGenerator.CustomEventDeclaration(eventSymbol.ExplicitInterfaceImplementations[0].ToDisplayString(),
+                        syntaxGenerator.TypeExpression(eventSymbol.Type),
+                        eventSymbol.DeclaredAccessibility == Accessibility.Private ? Accessibility.NotApplicable : eventSymbol.DeclaredAccessibility,
+                        DeclarationModifiers.From(eventSymbol));
+                }
                 // adds generation of add & remove accessors for the non abstract events.
                 return syntaxGenerator.CustomEventDeclaration(eventSymbol.Name,
                     syntaxGenerator.TypeExpression(eventSymbol.Type),
@@ -97,6 +123,19 @@ namespace Microsoft.DotNet.GenAPI
                 }
             }
 
+            //ensure const initialization is casted to the type of the field if it is an enum
+            if (symbol is IFieldSymbol fieldSymbol && fieldSymbol.IsConst && fieldSymbol.ContainingType.TypeKind != TypeKind.Enum)
+            {
+                var fieldDeclaration = (FieldDeclarationSyntax)syntaxGenerator.Declaration(fieldSymbol);
+                var variable = fieldDeclaration.Declaration.Variables.Single();
+                var initializer = variable.Initializer;
+                if (initializer is not null && fieldSymbol.Type.TypeKind == TypeKind.Enum)
+                {
+                    initializer = initializer.WithValue(SyntaxFactory.CastExpression(fieldDeclaration.Declaration.Type, SyntaxFactory.ParenthesizedExpression(initializer.Value)));
+                    fieldDeclaration = fieldDeclaration.WithDeclaration(fieldDeclaration.Declaration.WithVariables(SyntaxFactory.SingletonSeparatedList(variable.WithInitializer(initializer))));
+                }
+                return fieldDeclaration;
+            }
             try
             {
                 return syntaxGenerator.Declaration(symbol);
